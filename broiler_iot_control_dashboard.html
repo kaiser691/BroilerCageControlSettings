@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Broiler IoT Control Dashboard</title>
+
+  <!-- Browser tab favicon pointing directly to AB.png -->
+  <link
+    rel="icon"
+    type="image/png"
+    href="https://kaiser691.github.io/IoTBasedBroilerCage/images/AB.png"
+  />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Configure custom surface, border, and font tokens used across the dashboard
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+          },
+          colors: {
+            canvas: '#090d16',
+            panel: '#111827',
+            elevated: '#182234',
+            line: '#243044',
+            lineSoft: '#1b2536',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: #090d16;
+      color: #f1f5f9;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Accessible custom toggle switch driven by aria-checked="true|false" */
+    .toggle-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: 52px;
+      height: 30px;
+      border-radius: 9999px;
+      background-color: #334155;
+      border: 1px solid #475569;
+      transition: background-color 180ms ease, border-color 180ms ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch[aria-checked='true'] {
+      background-color: #10b981;
+      border-color: #34d399;
+    }
+
+    .toggle-switch::after {
+      content: '';
+      width: 24px;
+      height: 24px;
+      border-radius: 9999px;
+      background-color: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      transform: translateX(2px);
+      transition: transform 180ms ease;
+    }
+
+    .toggle-switch[aria-checked='true']::after {
+      transform: translateX(24px);
+    }
+
+    /* Hide scrollbar on quick-jump pill bar while keeping smooth touch swipe */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-canvas text-slate-100 font-sans antialiased">
+  <div class="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-6">
+    <!-- Top Header & Home Navigation -->
+    <header class="sticky top-2 z-30 bg-panel/95 backdrop-blur border border-line rounded-2xl p-3.5 sm:p-5 shadow-lg shadow-black/35">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-base sm:text-xl font-bold tracking-tight text-white truncate">
+              Broiler IoT Control Dashboard
+            </h1>
+            <span
+              id="connectionStatusBadge"
+              class="inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0"
+            >
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              CONNECTED
+            </span>
+          </div>
+          <p class="hidden sm:block text-xs sm:text-sm text-slate-400 mt-1 break-words">
+            Organized controls for <code class="font-mono text-slate-200">/Controls</code>,
+            <code class="font-mono text-slate-200">/Settings/Feeder</code>, and
+            <code class="font-mono text-slate-200">/Settings/TempControl</code>
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <a
+            href="https://kaiser691.github.io/IoTBasedBroilerCage/"
+            class="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-3 sm:px-3.5 py-2 rounded-xl text-xs font-semibold bg-elevated hover:bg-slate-700 active:scale-[0.98] text-slate-100 border border-line transition"
+          >
+            <svg class="w-4 h-4 text-emerald-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9.5z" />
+            </svg>
+            <span>Home</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick Section Jump Bar for Phone Navigation -->
+      <nav aria-label="Quick section jump" class="flex lg:hidden items-center gap-2 mt-3 pt-3 border-t border-lineSoft overflow-x-auto no-scrollbar">
+        <a
+          href="#section-controls"
+          class="px-3 py-1.5 rounded-lg text-xs font-mono bg-violet-500/15 text-violet-300 border border-violet-500/30 whitespace-nowrap shrink-0"
+        >
+          1. Controls
+        </a>
+        <a
+          href="#section-feeder"
+          class="px-3 py-1.5 rounded-lg text-xs font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap shrink-0"
+        >
+          2. Feeder
+        </a>
+        <a
+          href="#section-temp"
+          class="px-3 py-1.5 rounded-lg text-xs font-mono bg-rose-500/15 text-rose-300 border border-rose-500/30 whitespace-nowrap shrink-0"
+        >
+          3. TempControl
+        </a>
+      </nav>
+    </header>
+
+    <!-- Feedback Banner (replaces browser alert/confirm) -->
+    <div
+      id="feedbackBanner"
+      class="hidden rounded-2xl px-4 py-3 text-xs sm:text-sm border flex items-center justify-between gap-3"
+      role="status"
+    >
+      <span id="feedbackText" class="font-medium"></span>
+      <button
+        type="button"
+        onclick="hideFeedback()"
+        class="text-xs font-mono opacity-80 hover:opacity-100 px-2 py-1 cursor-pointer"
+      >
+        Dismiss
+      </button>
+    </div>
+
+    <!-- Top Summary Strip -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div class="bg-panel border border-line rounded-2xl p-3 sm:p-4 flex flex-col justify-between min-w-0">
+        <div class="flex items-center justify-between gap-1.5 text-[11px] sm:text-xs text-slate-400">
+          <span class="font-mono truncate">Controls</span>
+          <span
+            id="controlsModePill"
+            class="px-1.5 sm:px-2 py-0.5 rounded-md font-mono text-[10px] sm:text-[11px] bg-violet-500/15 text-violet-300 border border-violet-500/30 shrink-0"
+          >
+            STANDBY
+          </span>
+        </div>
+        <p id="controlsSummaryValue" class="mt-2 text-sm sm:text-lg font-semibold text-white leading-snug">
+          Fan: OFF · Lights: OFF
+        </p>
+        <p id="controlsSubSummary" class="mt-1 text-[10px] sm:text-[11px] font-mono text-slate-400 truncate">
+          servo1: 0° · servo2: 0°
+        </p>
+      </div>
+
+      <div class="bg-panel border border-line rounded-2xl p-3 sm:p-4 flex flex-col justify-between min-w-0">
+        <div class="flex items-center justify-between gap-1.5 text-[11px] sm:text-xs text-slate-400">
+          <span class="font-mono truncate">Feeder</span>
+          <span
+            id="feederModePill"
+            class="px-1.5 sm:px-2 py-0.5 rounded-md font-mono text-[10px] sm:text-[11px] bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0"
+          >
+            MANUAL
+          </span>
+        </div>
+        <p id="feederSummaryValue" class="mt-2 text-sm sm:text-lg font-semibold text-white leading-snug">
+          Open 45° · Every 10.0s
+        </p>
+        <p id="feederSubSummary" class="mt-1 text-[10px] sm:text-[11px] font-mono text-slate-400 truncate">
+          close-after: 5.0s · limit: 300g
+        </p>
+      </div>
+
+      <div class="bg-panel border border-line rounded-2xl p-3 sm:p-4 flex flex-col justify-between min-w-0">
+        <div class="flex items-center justify-between gap-1.5 text-[11px] sm:text-xs text-slate-400">
+          <span class="font-mono truncate">TempControl</span>
+          <span
+            id="tempModePill"
+            class="px-1.5 sm:px-2 py-0.5 rounded-md font-mono text-[10px] sm:text-[11px] bg-rose-500/15 text-rose-300 border border-rose-500/30 shrink-0"
+          >
+            AUTO · STEADY
+          </span>
+        </div>
+        <p id="tempSummaryValue" class="mt-2 text-sm sm:text-lg font-semibold text-white leading-snug">
+          Lights ≥28°C · Fan ≥32°C
+        </p>
+        <p id="tempSubSummary" class="mt-1 text-[10px] sm:text-[11px] font-mono text-slate-400 truncate">
+          blink: 1000ms / 1000ms
+        </p>
+      </div>
+
+      <div class="bg-panel border border-line rounded-2xl p-3 sm:p-4 flex flex-col justify-between min-w-0">
+        <div class="flex items-center justify-between gap-1.5 text-[11px] sm:text-xs text-slate-400">
+          <span class="font-mono truncate">Activity</span>
+          <span
+            id="writeCountBadge"
+            class="px-1.5 sm:px-2 py-0.5 rounded-md font-mono text-[10px] sm:text-[11px] bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0"
+          >
+            0 ops
+          </span>
+        </div>
+        <p id="lastWritePath" class="mt-2 font-mono text-xs sm:text-sm text-white truncate">
+          Idle
+        </p>
+        <label class="mt-1.5 inline-flex items-center justify-between gap-2 text-[11px] text-slate-300 cursor-pointer select-none py-1">
+          <span class="font-mono text-emerald-300 truncate">Instant Push</span>
+          <input
+            id="autoSyncToggle"
+            type="checkbox"
+            checked
+            onchange="toggleAutoSync(this.checked)"
+            class="w-4 h-4 accent-emerald-400 rounded cursor-pointer shrink-0"
+          />
+        </label>
+      </div>
+    </section>
+
+    <!-- Main Organized Controls & Settings Sections -->
+    <div class="space-y-4 sm:space-y-6">
+      <!-- Group 1: Direct Output Controls (/Controls) -->
+      <section id="section-controls" class="scroll-mt-28 sm:scroll-mt-24 bg-panel border border-line rounded-2xl overflow-hidden shadow-lg shadow-black/20">
+        <div class="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-line bg-elevated/50 flex items-center justify-between gap-3">
+          <div class="flex items-start sm:items-center gap-2.5 min-w-0">
+            <span class="w-8 h-8 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-300 shrink-0 mt-0.5 sm:mt-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                  1 · Actuators
+                </span>
+                <h2 class="text-sm sm:text-base font-semibold text-white flex items-center gap-2 flex-wrap">
+                  <span>Direct Output Controls</span>
+                  <code class="text-xs font-mono font-normal px-2 py-0.5 rounded bg-canvas text-violet-300 border border-line">
+                    /Controls
+                  </code>
+                </h2>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Relay switches (<code class="font-mono text-slate-300">fan</code>, <code class="font-mono text-slate-300">lights</code>) &amp; servo angles (<code class="font-mono text-slate-300">servo1</code>, <code class="font-mono text-slate-300">servo2</code>)
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onclick="toggleCardBody('body-Controls', 'chevron-Controls')"
+            class="w-10 h-10 rounded-xl bg-canvas hover:bg-slate-800 border border-line text-slate-300 flex items-center justify-center text-xs cursor-pointer shrink-0"
+            aria-label="Collapse or expand Controls section"
+          >
+            <span id="chevron-Controls">▾</span>
+          </button>
+        </div>
+
+        <div id="body-Controls" class="p-3.5 sm:p-5 space-y-4 sm:space-y-5">
+          <!-- Sub-group A: Boolean Relays -->
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <h3 class="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                Boolean Relay Toggles (2)
+              </h3>
+              <span class="text-[11px] font-mono text-rose-300">
+                Only if temp-control-manual is true
+              </span>
+            </div>
+            <div id="controlsBooleanContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+          </div>
+
+          <!-- Sub-group B: Servo Angles -->
+          <div class="space-y-2.5 pt-1 border-t border-lineSoft">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <h3 class="text-[11px] font-mono uppercase tracking-wider text-slate-400 pt-2">
+                Servo Position Angles (2)
+              </h3>
+              <span class="text-[11px] font-mono text-rose-300 pt-2">
+                Only if feeder-manual is true
+              </span>
+            </div>
+            <div id="controlsServoContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Group 2: Feeder Settings (/Settings/Feeder) -->
+      <section id="section-feeder" class="scroll-mt-28 sm:scroll-mt-24 bg-panel border border-line rounded-2xl overflow-hidden shadow-lg shadow-black/20">
+        <div class="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-line bg-elevated/50 flex items-center justify-between gap-3">
+          <div class="flex items-start sm:items-center gap-2.5 min-w-0">
+            <span class="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300 shrink-0 mt-0.5 sm:mt-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  2 · Feeding
+                </span>
+                <h2 class="text-sm sm:text-base font-semibold text-white flex items-center gap-2 flex-wrap">
+                  <span>Feeder Settings</span>
+                  <code class="text-xs font-mono font-normal px-2 py-0.5 rounded bg-canvas text-amber-300 border border-line">
+                    /Settings/Feeder
+                  </code>
+                </h2>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">
+                6 mode &amp; safety switches + 4 timing, angle &amp; weight parameters
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onclick="toggleCardBody('body-Feeder', 'chevron-Feeder')"
+            class="w-10 h-10 rounded-xl bg-canvas hover:bg-slate-800 border border-line text-slate-300 flex items-center justify-center text-xs cursor-pointer shrink-0"
+            aria-label="Collapse or expand Feeder section"
+          >
+            <span id="chevron-Feeder">▾</span>
+          </button>
+        </div>
+
+        <div id="body-Feeder" class="p-3.5 sm:p-5 space-y-4 sm:space-y-5">
+          <!-- Sub-group A: Feeder Mode & Safety Toggles -->
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between">
+              <h3 class="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                Feeder Mode &amp; Safety Toggles (6)
+              </h3>
+              <span class="text-[11px] font-mono text-slate-500">boolean switches</span>
+            </div>
+            <div id="feederBooleanContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+          </div>
+
+          <!-- Sub-group B: Feeder Numeric Parameters -->
+          <div class="space-y-2.5 pt-1 border-t border-lineSoft">
+            <div class="flex items-center justify-between">
+              <h3 class="text-[11px] font-mono uppercase tracking-wider text-slate-400 pt-2">
+                Timing, Angle &amp; Weight Parameters (4)
+              </h3>
+              <span class="text-[11px] font-mono text-slate-500 pt-2">time · deg · g</span>
+            </div>
+            <div id="feederNumericContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Group 3: TempControl Settings (/Settings/TempControl) -->
+      <section id="section-temp" class="scroll-mt-28 sm:scroll-mt-24 bg-panel border border-line rounded-2xl overflow-hidden shadow-lg shadow-black/20">
+        <div class="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-line bg-elevated/50 flex items-center justify-between gap-3">
+          <div class="flex items-start sm:items-center gap-2.5 min-w-0">
+            <span class="w-8 h-8 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-300 shrink-0 mt-0.5 sm:mt-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                  3 · Thermal
+                </span>
+                <h2 class="text-sm sm:text-base font-semibold text-white flex items-center gap-2 flex-wrap">
+                  <span>TempControl Settings</span>
+                  <code class="text-xs font-mono font-normal px-2 py-0.5 rounded bg-canvas text-rose-300 border border-line">
+                    /Settings/TempControl
+                  </code>
+                </h2>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">
+                2 thermal control toggles + 2 temperature thresholds &amp; 2 blink intervals
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onclick="toggleCardBody('body-TempControl', 'chevron-TempControl')"
+            class="w-10 h-10 rounded-xl bg-canvas hover:bg-slate-800 border border-line text-slate-300 flex items-center justify-center text-xs cursor-pointer shrink-0"
+            aria-label="Collapse or expand TempControl section"
+          >
+            <span id="chevron-TempControl">▾</span>
+          </button>
+        </div>
+
+        <div id="body-TempControl" class="p-3.5 sm:p-5 space-y-4 sm:space-y-5">
+          <!-- Sub-group A: Thermal Mode Toggles -->
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between">
+              <h3 class="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                Thermal Mode Toggles (2)
+              </h3>
+              <span class="text-[11px] font-mono text-slate-500">blink · manual override</span>
+            </div>
+            <div id="tempBooleanContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+          </div>
+
+          <!-- Sub-group B: Temperature Setpoints & Threshold Bar -->
+          <div class="space-y-3 pt-1 border-t border-lineSoft">
+            <div class="flex items-center justify-between">
+              <h3 class="text-[11px] font-mono uppercase tracking-wider text-slate-400 pt-2">
+                Temperature Setpoints (°C)
+              </h3>
+              <span class="text-[11px] font-mono text-slate-500 pt-2">lights-On-At · fan-On-At</span>
+            </div>
+
+            <div class="p-3.5 sm:p-4 rounded-xl bg-canvas border border-lineSoft space-y-2">
+              <div class="flex items-center justify-between gap-2 text-xs font-mono flex-wrap">
+                <span id="lightsThresholdLabel" class="text-amber-300">lights-On-At: 28°C</span>
+                <span id="fanThresholdLabel" class="text-rose-300">fan-On-At: 32°C</span>
+              </div>
+              <div class="w-full h-2.5 rounded-full bg-elevated overflow-hidden relative">
+                <div
+                  id="tempThresholdFill"
+                  class="h-full bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 transition-all duration-200"
+                  style="width: 64%;"
+                ></div>
+              </div>
+              <div class="flex justify-between text-[10px] font-mono text-slate-500">
+                <span>15°C</span>
+                <span>30°C</span>
+                <span>50°C</span>
+              </div>
+            </div>
+
+            <div id="tempSetpointContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"></div>
+          </div>
+
+          <!-- Sub-group C: Blink Pulse Intervals -->
+          <div class="space-y-2.5 pt-1 border-t border-lineSoft">
+            <div class="flex items-center justify-between">
+              <h3 class="text-[11px] font-mono uppercase tracking-wider text-slate-400 pt-2">
+                Blink Pulse Intervals
+              </h3>
+              <span class="text-[11px] font-mono text-slate-500 pt-2">on / off duration</span>
+            </div>
+            <div id="tempIntervalContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_STATE_KEY = 'broiler_rtdb_dashboard_state_v1';
+    const HARDCODED_DB_URL = 'https://iot-based-monitoring-dc003-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+    // Exact schema matching the user's Firebase Realtime Database nodes
+    const DEFAULT_SETTINGS = {
+      Controls: {
+        fan: false,
+        lights: false,
+        servo1: 0,
+        servo2: 0,
+      },
+      Feeder: {
+        'angle-open': 45,
+        'close-after': 5000,
+        'continuous-feeding': false,
+        'debug-mode': false,
+        'feed-interval': 10000,
+        'feeder-manual': true,
+        'interval-feeding': true,
+        'servo-writes': false,
+        'tray-limit-on': false,
+        'tray-weight-stop-limit': 300,
+      },
+      TempControl: {
+        'fan-On-At': 32,
+        'lights-On-At': 28,
+        'lights-blink-mode': false,
+        'lights-off-interval': 1000,
+        'lights-on-interval': 1000,
+        'temp-control-manual': false,
+      },
+    };
+
+    const BOOLEAN_META = {
+      Controls: [
+        { key: 'fan', label: 'Fan Relay', desc: 'Direct cooling fan output' },
+        { key: 'lights', label: 'Lights Relay', desc: 'Direct cage lighting output' },
+      ],
+      Feeder: [
+        { key: 'feeder-manual', label: 'Feeder Manual', desc: 'Manual servo override' },
+        { key: 'interval-feeding', label: 'Interval Feeding', desc: 'Timed feed cycles' },
+        { key: 'continuous-feeding', label: 'Continuous Feeding', desc: 'Continuous feed mode' },
+        { key: 'servo-writes', label: 'Servo Writes', desc: 'Enable servo output writes' },
+        { key: 'tray-limit-on', label: 'Tray Limit On', desc: 'Stop feed on tray weight' },
+        { key: 'debug-mode', label: 'Debug Mode', desc: 'Verbose feeder diagnostics' },
+      ],
+      TempControl: [
+        { key: 'temp-control-manual', label: 'Temp Manual Override', desc: 'Bypass auto thresholds' },
+        { key: 'lights-blink-mode', label: 'Lights Blink Mode', desc: 'Pulse lights on/off' },
+      ],
+    };
+
+    const NUMERIC_META = {
+      Controls: [
+        { key: 'servo1', label: 'Servo 1 Angle', min: 0, max: 80, step: 1, unit: '°' },
+        { key: 'servo2', label: 'Servo 2 Angle', min: 0, max: 80, step: 1, unit: '°' },
+      ],
+      Feeder: [
+        { key: 'angle-open', label: 'Angle Open', min: 0, max: 180, step: 1, unit: '°' },
+        { key: 'close-after', label: 'Close After', min: 0, max: 60000, step: 100, unit: 'ms' },
+        { key: 'feed-interval', label: 'Feed Interval', min: 0, max: 86400000, step: 500, unit: 'ms' },
+        { key: 'tray-weight-stop-limit', label: 'Tray Weight Limit', min: 0, max: 10000, step: 10, unit: 'g' },
+      ],
+      TempControl: {
+        setpoints: [
+          { key: 'lights-On-At', label: 'Lights On At', min: 0, max: 60, step: 1, unit: '°C' },
+          { key: 'fan-On-At', label: 'Fan On At', min: 0, max: 60, step: 1, unit: '°C' },
+        ],
+        intervals: [
+          { key: 'lights-on-interval', label: 'Lights On Interval', min: 100, max: 60000, step: 100, unit: 'ms' },
+          { key: 'lights-off-interval', label: 'Lights Off Interval', min: 100, max: 60000, step: 100, unit: 'ms' },
+        ],
+      },
+    };
+
+    const TIME_UNIT_MULTIPLIERS = {
+      ms: 1,
+      s: 1000,
+      min: 60000,
+      hr: 3600000,
+    };
+
+    const timeUnitSelections = {};
+
+    let config = {
+      dbUrl: HARDCODED_DB_URL,
+      authToken: '',
+      simulationMode: false,
+      autoSyncOnChange: true,
+    };
+
+    let settingsData = structuredClone(DEFAULT_SETTINGS);
+    let writeCount = 0;
+    let lastOperationLabel = 'Idle';
+    let pollTimerId = null;
+    const numberDebounceTimers = {};
+
+    function showFeedback(message, type = 'info') {
+      const banner = document.getElementById('feedbackBanner');
+      const text = document.getElementById('feedbackText');
+      if (!banner || !text) return;
+
+      const styles = {
+        info: 'bg-sky-500/15 border-sky-500/35 text-sky-200',
+        success: 'bg-emerald-500/15 border-emerald-500/35 text-emerald-200',
+        error: 'bg-rose-500/15 border-rose-500/35 text-rose-200',
+      };
+      banner.className = `rounded-2xl px-4 py-3 text-xs sm:text-sm border flex items-center justify-between gap-3 ${
+        styles[type] || styles.info
+      }`;
+      text.textContent = message;
+      banner.classList.remove('hidden');
+    }
+
+    function hideFeedback() {
+      const banner = document.getElementById('feedbackBanner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    function updateConnectionBadge(status = null) {
+      const badge = document.getElementById('connectionStatusBadge');
+      if (!badge) return;
+
+      if (status === 'error') {
+        badge.className =
+          'inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-mono bg-rose-500/15 text-rose-300 border border-rose-500/30 shrink-0';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span>SYNC ERROR';
+        return;
+      }
+
+      badge.className =
+        'inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0';
+      badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span>CONNECTED';
+    }
+
+    function persistConfig() {
+      config.dbUrl = HARDCODED_DB_URL;
+      config.simulationMode = false;
+    }
+
+    function persistSettingsState() {
+      try {
+        sessionStorage.setItem(STORAGE_STATE_KEY, JSON.stringify(settingsData));
+      } catch (_) {}
+    }
+
+    function loadSavedConfigAndState() {
+      config.dbUrl = HARDCODED_DB_URL;
+      config.authToken = '';
+      config.simulationMode = false;
+
+      try {
+        const savedState = sessionStorage.getItem(STORAGE_STATE_KEY);
+        if (savedState) {
+          const parsed = JSON.parse(savedState);
+          settingsData = {
+            Controls: { ...DEFAULT_SETTINGS.Controls, ...(parsed.Controls || {}) },
+            Feeder: { ...DEFAULT_SETTINGS.Feeder, ...(parsed.Feeder || {}) },
+            TempControl: { ...DEFAULT_SETTINGS.TempControl, ...(parsed.TempControl || {}) },
+          };
+        }
+      } catch (_) {}
+
+      const autoToggle = document.getElementById('autoSyncToggle');
+      if (autoToggle) autoToggle.checked = Boolean(config.autoSyncOnChange);
+      updateConnectionBadge();
+    }
+
+    function renderControlSections() {
+      const ctrlBoolEl = document.getElementById('controlsBooleanContainer');
+      const ctrlServoEl = document.getElementById('controlsServoContainer');
+      const feederBoolEl = document.getElementById('feederBooleanContainer');
+      const feederNumEl = document.getElementById('feederNumericContainer');
+      const tempBoolEl = document.getElementById('tempBooleanContainer');
+      const tempSetpointEl = document.getElementById('tempSetpointContainer');
+      const tempIntervalEl = document.getElementById('tempIntervalContainer');
+
+      if (ctrlBoolEl) {
+        ctrlBoolEl.innerHTML = BOOLEAN_META.Controls.map((m) => buildBooleanCard('Controls', m)).join('');
+      }
+      if (ctrlServoEl) {
+        ctrlServoEl.innerHTML = NUMERIC_META.Controls.map((m) => buildServoCard(m)).join('');
+      }
+      if (feederBoolEl) {
+        feederBoolEl.innerHTML = BOOLEAN_META.Feeder.map((m) => buildBooleanCard('Feeder', m)).join('');
+      }
+      if (feederNumEl) {
+        feederNumEl.innerHTML = NUMERIC_META.Feeder.map((m) =>
+          buildNumericCard('Feeder', m, 'handleFeederFieldChange', 'feederHelper')
+        ).join('');
+      }
+      if (tempBoolEl) {
+        tempBoolEl.innerHTML = BOOLEAN_META.TempControl.map((m) =>
+          buildBooleanCard('TempControl', m)
+        ).join('');
+      }
+      if (tempSetpointEl) {
+        tempSetpointEl.innerHTML = NUMERIC_META.TempControl.setpoints.map((m) =>
+          buildNumericCard('TempControl', m, 'handleTempFieldChange', 'tempHelper')
+        ).join('');
+      }
+      if (tempIntervalEl) {
+        tempIntervalEl.innerHTML = NUMERIC_META.TempControl.intervals.map((m) =>
+          buildNumericCard('TempControl', m, 'handleTempFieldChange', 'tempHelper')
+        ).join('');
+      }
+    }
+
+    function buildBooleanCard(section, meta) {
+      return `
+        <div
+          id="card-${section}-${meta.key}"
+          class="p-3 sm:p-3.5 rounded-xl bg-canvas border border-lineSoft flex items-center justify-between gap-3 transition min-w-0"
+        >
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <span class="text-xs font-semibold text-white">${meta.label}</span>
+              <span
+                id="badge-${section}-${meta.key}"
+                class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-elevated text-slate-400 border border-line"
+              >
+                false
+              </span>
+            </div>
+            <p class="text-[11px] font-mono text-slate-400 truncate mt-0.5">${meta.key}</p>
+            <div class="flex items-center gap-2 mt-1 flex-wrap">
+              <span class="text-[11px] text-slate-500 break-words">${meta.desc}</span>
+              <span
+                id="sync-${section}-${meta.key}"
+                class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-elevated text-slate-400"
+              >
+                ready
+              </span>
+            </div>
+          </div>
+
+          <button
+            id="switch-${section}-${meta.key}"
+            type="button"
+            role="switch"
+            aria-checked="false"
+            aria-label="${meta.label}"
+            onclick="toggleBooleanSetting('${section}', '${meta.key}')"
+            class="toggle-switch cursor-pointer"
+          ></button>
+        </div>
+      `;
+    }
+
+    function buildServoCard(meta) {
+      return `
+        <div class="p-3 sm:p-3.5 rounded-xl bg-canvas border border-lineSoft space-y-2.5 min-w-0">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="min-w-0">
+              <span class="text-xs font-semibold text-white">${meta.label}</span>
+              <span class="block text-[11px] font-mono text-slate-400">${meta.key}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span
+                id="sync-Controls-${meta.key}"
+                class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-elevated text-slate-400"
+              >
+                ready
+              </span>
+              <input
+                id="input-Controls-${meta.key}"
+                type="number"
+                min="${meta.min}"
+                max="${meta.max}"
+                step="${meta.step}"
+                value="0"
+                oninput="handleControlsFieldChange('${meta.key}', false)"
+                onchange="handleControlsFieldChange('${meta.key}', true)"
+                class="w-20 min-h-[38px] px-2 py-1.5 rounded-lg bg-panel border border-line text-xs font-mono text-right text-white focus:outline-none focus:border-violet-400"
+              />
+              <span class="text-xs font-mono text-slate-400">${meta.unit}</span>
+            </div>
+          </div>
+          <input
+            id="range-Controls-${meta.key}"
+            type="range"
+            min="${meta.min}"
+            max="${meta.max}"
+            step="${meta.step}"
+            value="0"
+            oninput="syncServoRangeToNumber('${meta.key}', this.value, false)"
+            onchange="syncServoRangeToNumber('${meta.key}', this.value, true)"
+            class="w-full h-6 accent-violet-400 cursor-pointer"
+          />
+        </div>
+      `;
+    }
+
+    function buildNumericCard(section, meta, changeHandlerName, helperIdPrefix) {
+      const isTimeField = meta.unit === 'ms';
+      const unitSelectorHtml = isTimeField
+        ? `
+          <select
+            id="unit-${section}-${meta.key}"
+            aria-label="${meta.label} time unit"
+            onchange="handleTimeUnitChange('${section}', '${meta.key}', '${changeHandlerName}')"
+            class="min-h-[40px] px-2.5 py-1.5 rounded-lg bg-panel border border-line text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-400 shrink-0 cursor-pointer"
+          >
+            <option value="ms">ms</option>
+            <option value="s">sec</option>
+            <option value="min">min</option>
+            <option value="hr">hr</option>
+          </select>
+        `
+        : `<span class="text-xs font-mono text-slate-400 shrink-0">${meta.unit}</span>`;
+
+      return `
+        <div class="p-3 sm:p-3.5 rounded-xl bg-canvas border border-lineSoft space-y-2 min-w-0">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <span class="text-xs font-semibold text-white truncate block">${meta.label}</span>
+              <span class="block text-[11px] font-mono text-slate-400 truncate">${meta.key}</span>
+            </div>
+            <span
+              id="sync-${section}-${meta.key}"
+              class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-elevated text-slate-400 shrink-0"
+            >
+              ready
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              id="input-${section}-${meta.key}"
+              type="number"
+              min="${meta.min}"
+              max="${meta.max}"
+              step="${meta.step}"
+              value="0"
+              oninput="${changeHandlerName}('${meta.key}', false)"
+              onchange="${changeHandlerName}('${meta.key}', true)"
+              class="w-full min-w-0 min-h-[40px] px-3 py-1.5 rounded-lg bg-panel border border-line text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+            />
+            ${unitSelectorHtml}
+          </div>
+          <p id="${helperIdPrefix}-${meta.key}" class="text-[11px] font-mono text-slate-500 break-words"></p>
+        </div>
+      `;
+    }
+
+    function getSelectedTimeUnit(section, key) {
+      const selectEl = document.getElementById(`unit-${section}-${key}`);
+      return timeUnitSelections[`${section}/${key}`] || (selectEl ? selectEl.value : 'ms') || 'ms';
+    }
+
+    function pickBestDisplayUnit(msValue) {
+      const absMs = Math.abs(Number(msValue) || 0);
+      if (absMs > 0 && absMs % 3600000 === 0) return 'hr';
+      if (absMs > 0 && absMs % 60000 === 0) return 'min';
+      if (absMs > 0 && absMs % 1000 === 0) return 's';
+      return 'ms';
+    }
+
+    function formatDisplayNumberFromMs(msValue, unit) {
+      const mult = TIME_UNIT_MULTIPLIERS[unit] || 1;
+      const converted = (Number(msValue) || 0) / mult;
+      return Number(converted.toFixed(4));
+    }
+
+    function convertDisplayInputToMs(rawInputVal, unit, fallbackMs) {
+      const num = Number(rawInputVal);
+      if (!Number.isFinite(num)) return fallbackMs;
+      const mult = TIME_UNIT_MULTIPLIERS[unit] || 1;
+      return Math.max(0, Math.round(num * mult));
+    }
+
+    function applyTimeUnitInputAttributes(section, key, unit, baseMeta) {
+      const inputEl = document.getElementById(`input-${section}-${key}`);
+      if (!inputEl || !baseMeta) return;
+      const mult = TIME_UNIT_MULTIPLIERS[unit] || 1;
+      inputEl.min = String(Number((baseMeta.min / mult).toFixed(4)));
+      inputEl.max = String(Number((baseMeta.max / mult).toFixed(4)));
+      inputEl.step = unit === 'ms' ? String(baseMeta.step) : 'any';
+    }
+
+    function syncTimeInputFromMs(section, key, msValue, baseMeta, preferredUnit = null) {
+      const unit = preferredUnit || getSelectedTimeUnit(section, key);
+      timeUnitSelections[`${section}/${key}`] = unit;
+      const selectEl = document.getElementById(`unit-${section}-${key}`);
+      if (selectEl) selectEl.value = unit;
+      applyTimeUnitInputAttributes(section, key, unit, baseMeta);
+
+      const inputEl = document.getElementById(`input-${section}-${key}`);
+      if (inputEl) {
+        inputEl.value = String(formatDisplayNumberFromMs(msValue, unit));
+      }
+    }
+
+    function handleTimeUnitChange(section, key, changeHandlerName) {
+      const selectEl = document.getElementById(`unit-${section}-${key}`);
+      const nextUnit = selectEl ? selectEl.value : 'ms';
+      timeUnitSelections[`${section}/${key}`] = nextUnit;
+
+      const currentMs =
+        section === 'Feeder'
+          ? Number(settingsData.Feeder?.[key] ?? DEFAULT_SETTINGS.Feeder[key])
+          : Number(settingsData.TempControl?.[key] ?? DEFAULT_SETTINGS.TempControl[key]);
+
+      const metaList =
+        section === 'Feeder'
+          ? NUMERIC_META.Feeder
+          : [...NUMERIC_META.TempControl.setpoints, ...NUMERIC_META.TempControl.intervals];
+      const baseMeta = metaList.find((item) => item.key === key);
+
+      syncTimeInputFromMs(section, key, currentMs, baseMeta, nextUnit);
+
+      if (section === 'Feeder') {
+        updateFeederHelper(key, currentMs);
+      } else if (section === 'TempControl') {
+        updateTempHelper(key, currentMs);
+      }
+
+      if (typeof window[changeHandlerName] === 'function') {
+        window[changeHandlerName](key, false);
+      }
+    }
+
+    function formatDurationBreakdown(msValue) {
+      const totalMs = Math.max(0, Math.round(Number(msValue) || 0));
+      const totalSec = Math.floor(totalMs / 1000);
+      const hr = Math.floor(totalSec / 3600);
+      const min = Math.floor((totalSec % 3600) / 60);
+      const sec = totalSec % 60;
+      const remMs = totalMs % 1000;
+
+      const parts = [];
+      if (hr > 0) parts.push(`${hr}h`);
+      if (min > 0) parts.push(`${min}m`);
+      if (sec > 0 || (hr === 0 && min === 0 && remMs === 0)) parts.push(`${sec}s`);
+      if (remMs > 0) parts.push(`${remMs}ms`);
+
+      return `${parts.join(' ')} (${totalMs.toLocaleString()} ms)`;
+    }
+
+    function updateFeederHelper(key, val) {
+      const el = document.getElementById(`feederHelper-${key}`);
+      if (!el) return;
+      if (key === 'close-after' || key === 'feed-interval') {
+        el.textContent = `= ${formatDurationBreakdown(val)}`;
+      } else if (key === 'angle-open') {
+        el.textContent = `Servo open target: ${Number(val)}°`;
+      } else if (key === 'tray-weight-stop-limit') {
+        el.textContent = `Feed stop threshold: ${Number(val)} grams`;
+      }
+    }
+
+    function updateTempHelper(key, val) {
+      const el = document.getElementById(`tempHelper-${key}`);
+      if (!el) return;
+      if (key === 'lights-on-interval' || key === 'lights-off-interval') {
+        el.textContent = `= ${formatDurationBreakdown(val)}`;
+      } else if (key === 'lights-On-At' || key === 'fan-On-At') {
+        el.textContent = `Trigger setpoint: ${Number(val)} °C`;
+      }
+    }
+
+    function updateTempThresholdBar() {
+      const temp = settingsData.TempControl || {};
+      const lightsAt = Number(temp['lights-On-At'] ?? 28);
+      const fanAt = Number(temp['fan-On-At'] ?? 32);
+
+      const lightsLabel = document.getElementById('lightsThresholdLabel');
+      const fanLabel = document.getElementById('fanThresholdLabel');
+      const fill = document.getElementById('tempThresholdFill');
+
+      if (lightsLabel) lightsLabel.textContent = `lights-On-At: ${lightsAt}°C`;
+      if (fanLabel) fanLabel.textContent = `fan-On-At: ${fanAt}°C`;
+      if (fill) {
+        const maxRef = Math.max(lightsAt, fanAt, 40);
+        const pct = Math.min(100, Math.max(8, Math.round((maxRef / 50) * 100)));
+        fill.style.width = `${pct}%`;
+      }
+    }
+
+    function syncServoRangeToNumber(key, rawValue, immediate = false) {
+      const numVal = Number(rawValue);
+      const numInput = document.getElementById(`input-Controls-${key}`);
+      if (numInput) numInput.value = numVal;
+      handleControlsFieldChange(key, immediate);
+    }
+
+    function handleControlsFieldChange(changedKey = null, immediate = false) {
+      if (!settingsData.Controls) settingsData.Controls = {};
+      ['servo1', 'servo2'].forEach((k) => {
+        const inputEl = document.getElementById(`input-Controls-${k}`);
+        const rangeEl = document.getElementById(`range-Controls-${k}`);
+        const val = Math.min(80, Math.max(0, Number(inputEl ? inputEl.value : 0) || 0));
+        settingsData.Controls[k] = val;
+        if (inputEl) inputEl.value = val;
+        if (rangeEl) rangeEl.value = val;
+      });
+      persistSettingsState();
+      updateSummaryCards();
+      if (changedKey) {
+        scheduleNumericPatch('Controls', changedKey, settingsData.Controls[changedKey], immediate);
+      }
+    }
+
+    function handleFeederFieldChange(changedKey = null, immediate = false) {
+      if (!settingsData.Feeder) settingsData.Feeder = {};
+      ['angle-open', 'close-after', 'feed-interval', 'tray-weight-stop-limit'].forEach((k) => {
+        const inputEl = document.getElementById(`input-Feeder-${k}`);
+        const fallback = DEFAULT_SETTINGS.Feeder[k];
+        const isTimeKey = k === 'close-after' || k === 'feed-interval';
+        const val = isTimeKey
+          ? convertDisplayInputToMs(inputEl ? inputEl.value : fallback, getSelectedTimeUnit('Feeder', k), fallback)
+          : Number(inputEl ? inputEl.value : fallback);
+        const safeVal = Number.isFinite(val) ? val : fallback;
+        settingsData.Feeder[k] = safeVal;
+        updateFeederHelper(k, safeVal);
+      });
+      persistSettingsState();
+      updateSummaryCards();
+      if (changedKey) {
+        scheduleNumericPatch('Feeder', changedKey, settingsData.Feeder[changedKey], immediate);
+      }
+    }
+
+    function handleTempFieldChange(changedKey = null, immediate = false) {
+      if (!settingsData.TempControl) settingsData.TempControl = {};
+      ['fan-On-At', 'lights-On-At', 'lights-off-interval', 'lights-on-interval'].forEach((k) => {
+        const inputEl = document.getElementById(`input-TempControl-${k}`);
+        const fallback = DEFAULT_SETTINGS.TempControl[k];
+        const isTimeKey = k === 'lights-off-interval' || k === 'lights-on-interval';
+        const val = isTimeKey
+          ? convertDisplayInputToMs(inputEl ? inputEl.value : fallback, getSelectedTimeUnit('TempControl', k), fallback)
+          : Number(inputEl ? inputEl.value : fallback);
+        const safeVal = Number.isFinite(val) ? val : fallback;
+        settingsData.TempControl[k] = safeVal;
+        updateTempHelper(k, safeVal);
+      });
+      updateTempThresholdBar();
+      persistSettingsState();
+      updateSummaryCards();
+      if (changedKey) {
+        scheduleNumericPatch('TempControl', changedKey, settingsData.TempControl[changedKey], immediate);
+      }
+    }
+
+    function recordOperation(method, pathLabel) {
+      writeCount += 1;
+      lastOperationLabel = `${method} /${pathLabel}`;
+      updateSummaryCards();
+    }
+
+    async function rtdbRequest(method, subPath, payload = null) {
+      const cleanPath = String(subPath || '').replace(/^\/+|\/+$/g, '');
+      const baseUrl = HARDCODED_DB_URL.replace(/\/+$/, '');
+      const targetUrl = `${baseUrl}/${cleanPath ? `${cleanPath}.json` : '.json'}`;
+
+      const fetchOpts = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+      };
+      if (payload !== null && method !== 'GET' && method !== 'DELETE') {
+        fetchOpts.body = JSON.stringify(payload);
+      }
+
+      try {
+        const res = await fetch(targetUrl, fetchOpts);
+        if (!res.ok) {
+          throw new Error(`RTDB ${method} /${cleanPath} failed (${res.status})`);
+        }
+        const data = await res.json();
+        recordOperation(method, cleanPath || 'root');
+        updateConnectionBadge('ok');
+        return data;
+      } catch (err) {
+        updateConnectionBadge('error');
+        throw err;
+      }
+    }
+
+    async function manualSync() {
+      try {
+        const remote = await rtdbRequest('GET', '');
+        if (remote && typeof remote === 'object') {
+          if (remote.Controls) {
+            settingsData.Controls = { ...remote.Controls };
+          }
+          if (remote.Settings) {
+            if (remote.Settings.Feeder) {
+              settingsData.Feeder = { ...remote.Settings.Feeder };
+            }
+            if (remote.Settings.TempControl) {
+              settingsData.TempControl = { ...remote.Settings.TempControl };
+            }
+          }
+          persistSettingsState();
+          populateFormFromState();
+        }
+      } catch (_) {
+        // Handled via connection status badge
+      }
+    }
+
+    function toggleAutoSync(checked) {
+      config.autoSyncOnChange = Boolean(checked);
+      persistConfig();
+      showFeedback(
+        config.autoSyncOnChange
+          ? 'Instant Push enabled: changes immediately PATCH Firebase RTDB.'
+          : 'Instant Push paused: changes stay staged locally until re-enabled.',
+        'info'
+      );
+    }
+
+    function startPolling() {
+      if (pollTimerId) clearInterval(pollTimerId);
+      pollTimerId = setInterval(() => {
+        manualSync().catch(() => {});
+      }, 6000);
+    }
+
+    function syncBooleanSwitchVisual(section, key, isTrue) {
+      const switchEl = document.getElementById(`switch-${section}-${key}`);
+      const badgeEl = document.getElementById(`badge-${section}-${key}`);
+      const cardEl = document.getElementById(`card-${section}-${key}`);
+
+      if (switchEl) {
+        switchEl.setAttribute('aria-checked', String(Boolean(isTrue)));
+      }
+      if (badgeEl) {
+        badgeEl.textContent = String(Boolean(isTrue));
+        badgeEl.className = isTrue
+          ? 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+          : 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-elevated text-slate-400 border border-line';
+      }
+      if (cardEl) {
+        cardEl.classList.toggle('border-emerald-500/35', Boolean(isTrue));
+        cardEl.classList.toggle('border-lineSoft', !Boolean(isTrue));
+      }
+    }
+
+    function setControlSyncStatus(section, key, state, label) {
+      const el = document.getElementById(`sync-${section}-${key}`);
+      if (!el) return;
+      el.textContent = label;
+      const styles = {
+        ready: 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-elevated text-slate-400',
+        saving: 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30',
+        synced: 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+        error: 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30',
+      };
+      el.className = styles[state] || styles.ready;
+    }
+
+    function toggleCardBody(bodyId, chevronId) {
+      const body = document.getElementById(bodyId);
+      const chevron = document.getElementById(chevronId);
+      if (!body) return;
+      const isHidden = body.classList.toggle('hidden');
+      if (chevron) {
+        chevron.textContent = isHidden ? '▸' : '▾';
+      }
+    }
+
+    async function toggleBooleanSetting(section, key) {
+      if (!settingsData[section]) {
+        settingsData[section] = {};
+      }
+      const nextValue = !Boolean(settingsData[section][key]);
+      settingsData[section][key] = nextValue;
+      syncBooleanSwitchVisual(section, key, nextValue);
+      persistSettingsState();
+      updateSummaryCards();
+
+      if (config.autoSyncOnChange) {
+        try {
+          await pushSingleKeyPatch(section, key, nextValue);
+        } catch (err) {
+          showFeedback(err.message, 'error');
+        }
+      } else {
+        setControlSyncStatus(section, key, 'ready', 'staged');
+        showFeedback(`Staged ${section}/${key} = ${nextValue} (Instant Push off).`, 'info');
+      }
+    }
+
+    function updateSummaryCards() {
+      const ctrl = settingsData.Controls || {};
+      const feeder = settingsData.Feeder || {};
+      const temp = settingsData.TempControl || {};
+
+      const controlsPill = document.getElementById('controlsModePill');
+      const controlsSummary = document.getElementById('controlsSummaryValue');
+      const controlsSub = document.getElementById('controlsSubSummary');
+      if (controlsSummary) {
+        controlsSummary.textContent = `Fan: ${ctrl.fan ? 'ON' : 'OFF'} · Lights: ${ctrl.lights ? 'ON' : 'OFF'}`;
+      }
+      if (controlsSub) {
+        controlsSub.textContent = `servo1: ${ctrl.servo1 ?? 0}° · servo2: ${ctrl.servo2 ?? 0}°`;
+      }
+      if (controlsPill) {
+        const anyActive = Boolean(ctrl.fan || ctrl.lights || (ctrl.servo1 ?? 0) > 0 || (ctrl.servo2 ?? 0) > 0);
+        controlsPill.textContent = anyActive ? 'ACTIVE' : 'STANDBY';
+      }
+
+      const feederPill = document.getElementById('feederModePill');
+      const feederSummary = document.getElementById('feederSummaryValue');
+      const feederSub = document.getElementById('feederSubSummary');
+      if (feederSummary) {
+        feederSummary.textContent = `Open ${feeder['angle-open'] ?? 45}° · Every ${((feeder['feed-interval'] ?? 10000) / 1000).toFixed(1)}s`;
+      }
+      if (feederSub) {
+        feederSub.textContent = `close-after: ${((feeder['close-after'] ?? 5000) / 1000).toFixed(1)}s · limit: ${feeder['tray-weight-stop-limit'] ?? 300}g`;
+      }
+      if (feederPill) {
+        const modeLabel = feeder['feeder-manual']
+          ? 'MANUAL'
+          : feeder['continuous-feeding']
+          ? 'AUTO · CONT'
+          : feeder['interval-feeding']
+          ? 'AUTO · INTERVAL'
+          : 'AUTO · IDLE';
+        feederPill.textContent = modeLabel;
+      }
+
+      const tempPill = document.getElementById('tempModePill');
+      const tempSummary = document.getElementById('tempSummaryValue');
+      const tempSub = document.getElementById('tempSubSummary');
+      if (tempSummary) {
+        tempSummary.textContent = `Lights ≥${temp['lights-On-At'] ?? 28}°C · Fan ≥${temp['fan-On-At'] ?? 32}°C`;
+      }
+      if (tempSub) {
+        tempSub.textContent = `blink: ${temp['lights-on-interval'] ?? 1000}ms / ${temp['lights-off-interval'] ?? 1000}ms`;
+      }
+      if (tempPill) {
+        const ctrlMode = temp['temp-control-manual'] ? 'MANUAL' : 'AUTO';
+        const lightMode = temp['lights-blink-mode'] ? 'BLINK' : 'STEADY';
+        tempPill.textContent = `${ctrlMode} · ${lightMode}`;
+      }
+
+      const writeBadge = document.getElementById('writeCountBadge');
+      const lastPathEl = document.getElementById('lastWritePath');
+      if (writeBadge) {
+        writeBadge.textContent = `${writeCount} ops`;
+      }
+      if (lastPathEl) {
+        lastPathEl.textContent = lastOperationLabel;
+      }
+    }
+
+    function populateFormFromState() {
+      const ctrl = settingsData.Controls || {};
+      const feeder = settingsData.Feeder || {};
+      const temp = settingsData.TempControl || {};
+
+      ['fan', 'lights'].forEach((k) => {
+        syncBooleanSwitchVisual('Controls', k, Boolean(ctrl[k]));
+        setControlSyncStatus('Controls', k, 'ready', 'ready');
+      });
+
+      ['servo1', 'servo2'].forEach((k) => {
+        const val = Number(ctrl[k] ?? 0);
+        const numInput = document.getElementById(`input-Controls-${k}`);
+        const rangeInput = document.getElementById(`range-Controls-${k}`);
+        if (numInput) numInput.value = val;
+        if (rangeInput) rangeInput.value = val;
+        setControlSyncStatus('Controls', k, 'ready', 'ready');
+      });
+
+      [
+        'continuous-feeding',
+        'debug-mode',
+        'feeder-manual',
+        'interval-feeding',
+        'servo-writes',
+        'tray-limit-on',
+      ].forEach((k) => {
+        syncBooleanSwitchVisual('Feeder', k, Boolean(feeder[k]));
+        setControlSyncStatus('Feeder', k, 'ready', 'ready');
+      });
+
+      ['angle-open', 'close-after', 'feed-interval', 'tray-weight-stop-limit'].forEach((k) => {
+        const fallback = DEFAULT_SETTINGS.Feeder[k];
+        const val = Number(feeder[k] ?? fallback);
+        if (k === 'close-after' || k === 'feed-interval') {
+          const baseMeta = NUMERIC_META.Feeder.find((item) => item.key === k);
+          const chosenUnit = timeUnitSelections[`Feeder/${k}`] || pickBestDisplayUnit(val);
+          syncTimeInputFromMs('Feeder', k, val, baseMeta, chosenUnit);
+        } else {
+          const inputEl = document.getElementById(`input-Feeder-${k}`);
+          if (inputEl) inputEl.value = val;
+        }
+        updateFeederHelper(k, val);
+        setControlSyncStatus('Feeder', k, 'ready', 'ready');
+      });
+
+      ['lights-blink-mode', 'temp-control-manual'].forEach((k) => {
+        syncBooleanSwitchVisual('TempControl', k, Boolean(temp[k]));
+        setControlSyncStatus('TempControl', k, 'ready', 'ready');
+      });
+
+      ['fan-On-At', 'lights-On-At', 'lights-off-interval', 'lights-on-interval'].forEach((k) => {
+        const fallback = DEFAULT_SETTINGS.TempControl[k];
+        const val = Number(temp[k] ?? fallback);
+        if (k === 'lights-off-interval' || k === 'lights-on-interval') {
+          const baseMeta = NUMERIC_META.TempControl.intervals.find((item) => item.key === k);
+          const chosenUnit = timeUnitSelections[`TempControl/${k}`] || pickBestDisplayUnit(val);
+          syncTimeInputFromMs('TempControl', k, val, baseMeta, chosenUnit);
+        } else {
+          const inputEl = document.getElementById(`input-TempControl-${k}`);
+          if (inputEl) inputEl.value = val;
+        }
+        updateTempHelper(k, val);
+        setControlSyncStatus('TempControl', k, 'ready', 'ready');
+      });
+
+      updateTempThresholdBar();
+      updateSummaryCards();
+    }
+
+    async function pushSingleKeyPatch(section, key, value) {
+      const parentPath = section === 'Controls' ? 'Controls' : `Settings/${section}`;
+      setControlSyncStatus(section, key, 'saving', 'PATCH...');
+      try {
+        await rtdbRequest('PATCH', parentPath, { [key]: value });
+        setControlSyncStatus(section, key, 'synced', 'synced');
+      } catch (err) {
+        setControlSyncStatus(section, key, 'error', 'failed');
+        throw err;
+      }
+    }
+
+    function scheduleNumericPatch(section, key, value, immediate = false) {
+      const timerKey = `${section}/${key}`;
+      if (numberDebounceTimers[timerKey]) {
+        clearTimeout(numberDebounceTimers[timerKey]);
+      }
+      if (!config.autoSyncOnChange) {
+        persistSettingsState();
+        setControlSyncStatus(section, key, 'ready', 'staged');
+        return;
+      }
+      setControlSyncStatus(section, key, 'saving', immediate ? 'PATCH...' : 'queued');
+      const runPatch = async () => {
+        try {
+          await pushSingleKeyPatch(section, key, value);
+        } catch (err) {
+          showFeedback(err.message, 'error');
+        }
+      };
+      if (immediate) {
+        runPatch();
+      } else {
+        numberDebounceTimers[timerKey] = setTimeout(runPatch, 350);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        loadSavedConfigAndState();
+        renderControlSections();
+        populateFormFromState();
+        manualSync().catch(() => {});
+        startPolling();
+      } catch (err) {
+        showFeedback(`Initialization error: ${err.message}`, 'error');
+      }
+    });
+  </script>
+</body>
+</html>
