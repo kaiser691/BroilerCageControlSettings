@@ -575,6 +575,7 @@
     let writeCount = 0;
     let lastOperationLabel = 'Idle';
     let pollTimerId = null;
+    let activeWriteCount = 0;
     const numberDebounceTimers = {};
 
     function showFeedback(message, type = 'info') {
@@ -978,7 +979,7 @@
       persistSettingsState();
       updateSummaryCards();
       if (changedKey) {
-        scheduleNumericPatch('Controls', changedKey, settingsData.Controls[changedKey], immediate);
+        scheduleNumericWrite('Controls', changedKey, settingsData.Controls[changedKey], immediate);
       }
     }
 
@@ -998,7 +999,7 @@
       persistSettingsState();
       updateSummaryCards();
       if (changedKey) {
-        scheduleNumericPatch('Feeder', changedKey, settingsData.Feeder[changedKey], immediate);
+        scheduleNumericWrite('Feeder', changedKey, settingsData.Feeder[changedKey], immediate);
       }
     }
 
@@ -1019,7 +1020,7 @@
       persistSettingsState();
       updateSummaryCards();
       if (changedKey) {
-        scheduleNumericPatch('TempControl', changedKey, settingsData.TempControl[changedKey], immediate);
+        scheduleNumericWrite('TempControl', changedKey, settingsData.TempControl[changedKey], immediate);
       }
     }
 
@@ -1058,6 +1059,11 @@
     }
 
     async function manualSync() {
+      // Skip polling overwrite while a write or debounced slider edit is in flight
+      if (activeWriteCount > 0 || Object.keys(numberDebounceTimers).length > 0) {
+        return;
+      }
+
       try {
         const remote = await rtdbRequest('GET', '');
         if (remote && typeof remote === 'object') {
@@ -1085,7 +1091,7 @@
       persistConfig();
       showFeedback(
         config.autoSyncOnChange
-          ? 'Instant Push enabled: changes immediately PATCH Firebase RTDB.'
+          ? 'Instant Push enabled: changes immediately PUT to Firebase RTDB child paths.'
           : 'Instant Push paused: changes stay staged locally until re-enabled.',
         'info'
       );
@@ -1153,7 +1159,7 @@
 
       if (config.autoSyncOnChange) {
         try {
-          await pushSingleKeyPatch(section, key, nextValue);
+          await pushSingleKeyPut(section, key, nextValue);
         } catch (err) {
           showFeedback(err.message, 'error');
         }
@@ -1241,8 +1247,8 @@
         const val = Number(ctrl[k] ?? 0);
         const numInput = document.getElementById(`input-Controls-${k}`);
         const rangeInput = document.getElementById(`range-Controls-${k}`);
-        if (numInput) numInput.value = val;
-        if (rangeInput) rangeInput.value = val;
+        if (numInput && document.activeElement !== numInput) numInput.value = val;
+        if (rangeInput && document.activeElement !== rangeInput) rangeInput.value = val;
         setControlSyncStatus('Controls', k, 'ready', 'ready');
       });
 
@@ -1261,13 +1267,15 @@
       ['angle-open', 'close-after', 'feed-interval', 'tray-weight-stop-limit'].forEach((k) => {
         const fallback = DEFAULT_SETTINGS.Feeder[k];
         const val = Number(feeder[k] ?? fallback);
-        if (k === 'close-after' || k === 'feed-interval') {
-          const baseMeta = NUMERIC_META.Feeder.find((item) => item.key === k);
-          const chosenUnit = timeUnitSelections[`Feeder/${k}`] || pickBestDisplayUnit(val);
-          syncTimeInputFromMs('Feeder', k, val, baseMeta, chosenUnit);
-        } else {
-          const inputEl = document.getElementById(`input-Feeder-${k}`);
-          if (inputEl) inputEl.value = val;
+        const inputEl = document.getElementById(`input-Feeder-${k}`);
+        if (inputEl && document.activeElement !== inputEl) {
+          if (k === 'close-after' || k === 'feed-interval') {
+            const baseMeta = NUMERIC_META.Feeder.find((item) => item.key === k);
+            const chosenUnit = timeUnitSelections[`Feeder/${k}`] || pickBestDisplayUnit(val);
+            syncTimeInputFromMs('Feeder', k, val, baseMeta, chosenUnit);
+          } else {
+            inputEl.value = val;
+          }
         }
         updateFeederHelper(k, val);
         setControlSyncStatus('Feeder', k, 'ready', 'ready');
@@ -1281,13 +1289,15 @@
       ['fan-On-At', 'lights-On-At', 'lights-off-interval', 'lights-on-interval'].forEach((k) => {
         const fallback = DEFAULT_SETTINGS.TempControl[k];
         const val = Number(temp[k] ?? fallback);
-        if (k === 'lights-off-interval' || k === 'lights-on-interval') {
-          const baseMeta = NUMERIC_META.TempControl.intervals.find((item) => item.key === k);
-          const chosenUnit = timeUnitSelections[`TempControl/${k}`] || pickBestDisplayUnit(val);
-          syncTimeInputFromMs('TempControl', k, val, baseMeta, chosenUnit);
-        } else {
-          const inputEl = document.getElementById(`input-TempControl-${k}`);
-          if (inputEl) inputEl.value = val;
+        const inputEl = document.getElementById(`input-TempControl-${k}`);
+        if (inputEl && document.activeElement !== inputEl) {
+          if (k === 'lights-off-interval' || k === 'lights-on-interval') {
+            const baseMeta = NUMERIC_META.TempControl.intervals.find((item) => item.key === k);
+            const chosenUnit = timeUnitSelections[`TempControl/${k}`] || pickBestDisplayUnit(val);
+            syncTimeInputFromMs('TempControl', k, val, baseMeta, chosenUnit);
+          } else {
+            inputEl.value = val;
+          }
         }
         updateTempHelper(k, val);
         setControlSyncStatus('TempControl', k, 'ready', 'ready');
@@ -1297,40 +1307,46 @@
       updateSummaryCards();
     }
 
-    async function pushSingleKeyPatch(section, key, value) {
-      const parentPath = section === 'Controls' ? 'Controls' : `Settings/${section}`;
-      setControlSyncStatus(section, key, 'saving', 'PATCH...');
+    // Use HTTP PUT on the exact leaf key path so ESP32 RTDB streams receive "/key" instead of root "/"
+    async function pushSingleKeyPut(section, key, value) {
+      const fullPath = section === 'Controls' ? `Controls/${key}` : `Settings/${section}/${key}`;
+      setControlSyncStatus(section, key, 'saving', 'PUT...');
+      activeWriteCount += 1;
       try {
-        await rtdbRequest('PATCH', parentPath, { [key]: value });
+        await rtdbRequest('PUT', fullPath, value);
         setControlSyncStatus(section, key, 'synced', 'synced');
       } catch (err) {
         setControlSyncStatus(section, key, 'error', 'failed');
         throw err;
+      } finally {
+        activeWriteCount = Math.max(0, activeWriteCount - 1);
       }
     }
 
-    function scheduleNumericPatch(section, key, value, immediate = false) {
+    function scheduleNumericWrite(section, key, value, immediate = false) {
       const timerKey = `${section}/${key}`;
       if (numberDebounceTimers[timerKey]) {
         clearTimeout(numberDebounceTimers[timerKey]);
+        delete numberDebounceTimers[timerKey];
       }
       if (!config.autoSyncOnChange) {
         persistSettingsState();
         setControlSyncStatus(section, key, 'ready', 'staged');
         return;
       }
-      setControlSyncStatus(section, key, 'saving', immediate ? 'PATCH...' : 'queued');
-      const runPatch = async () => {
+      setControlSyncStatus(section, key, 'saving', immediate ? 'PUT...' : 'queued');
+      const runPut = async () => {
+        delete numberDebounceTimers[timerKey];
         try {
-          await pushSingleKeyPatch(section, key, value);
+          await pushSingleKeyPut(section, key, value);
         } catch (err) {
           showFeedback(err.message, 'error');
         }
       };
       if (immediate) {
-        runPatch();
+        runPut();
       } else {
-        numberDebounceTimers[timerKey] = setTimeout(runPatch, 350);
+        numberDebounceTimers[timerKey] = setTimeout(runPut, 250);
       }
     }
 
